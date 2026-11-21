@@ -81,7 +81,7 @@ button.on{background:var(--ink);color:var(--panel)}
 <div id="timebar" role="slider" aria-label="Time of day — click to skip ahead" tabindex="0"><i id="tbm"></i><span id="tbt"></span></div><div id="stats"></div><div id="demand" aria-label="Zone demand"></div><button id="newTown">New town</button></div>
 <div id="speed" class="card" role="group" aria-label="Simulation speed">
  <button data-s="0" title="Pause (Space)">❚❚</button><button data-s="1" class="on">1×</button><button data-s="3">3×</button><button data-s="8">8×</button>
- <button id="sndBtn" title="Relaxing city sounds (M)" aria-pressed="false">Sound</button><input id="sndVol" type="range" min="0" max="1" step="0.05" value="0.6" aria-label="Volume" hidden><button id="fit" title="Frame the whole town (F)">Fit</button><button id="pix" title="Toggle pixel rendering (P)">Pixel</button>
+ <button id="sndBtn" title="Relaxing city sounds (M)" aria-pressed="false">Sound</button><input id="sndVol" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume" hidden><button id="fit" title="Frame the whole town (F)">Fit</button><button id="pix" title="Toggle pixel rendering (P)">Pixel</button>
 </div>
 <div id="tools" class="card" role="toolbar" aria-label="Mode">
  <button data-m="explore" class="on"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#c9b6e4" stroke="#2b2433" d="M6.5 1.5h3v4h4v3h-4v4h-3v-4h-4v-3h4z"/><rect x="7" y="13" width="2" height="2" fill="#2b2433"/></svg>Explore<kbd>1</kbd></button>
@@ -922,39 +922,43 @@ post=(()=>{try{const V='varying vec2 v;void main(){v=uv;gl_Position=vec4(positio
  setSize();return{render,setSize};}catch(e){console.warn('Glow pass unavailable',e);return null;}})();
 
 // ---------- soundscape (all generated with Web Audio, no files) ----------
-const Sound=(()=>{let ctx=null,master,rev,bus,hum,humF,wind,windF,noiseBuf,on=false,vol=.6,nextChord=0,ci=0,lastHr=-1;
- const PADS=[[130.81,164.81,196,246.94,293.66],[110,130.81,164.81,196,246.94],[87.31,110,130.81,164.81,246.94],[98,123.47,146.83,164.81,220]];
+const Sound=(()=>{let outEl=null,ctx=null,master,rev,bus,hum,humF,wind,windF,noiseBuf,on=false,vol=.6,nextChord=0,ci=0,lastHr=-1;
+ const PADS=[[261.63,329.63,392,493.88,587.33],[220,261.63,329.63,392,493.88],[174.61,220,261.63,329.63,493.88],[196,246.94,293.66,329.63,440]];
  const MEL=[523.25,587.33,659.25,783.99,880,1046.5,1174.66];
  const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
- function init(){ctx=new(window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=0;const lim=ctx.createDynamicsCompressor();lim.threshold.value=-14;lim.ratio.value=6;lim.attack.value=.01;lim.release.value=.3;master.connect(lim).connect(ctx.destination);
+ function init(){ctx=new(window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=0;const lim=ctx.createDynamicsCompressor();lim.threshold.value=-10;lim.ratio.value=8;lim.attack.value=.005;lim.release.value=.25;master.connect(lim);
+  const apple=/iP(hone|ad|od)/.test(navigator.userAgent)||(/Safari/.test(navigator.userAgent)&&!/Chrome|Chromium|Android/.test(navigator.userAgent))||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  if(apple&&ctx.createMediaStreamDestination){try{const md=ctx.createMediaStreamDestination();lim.connect(md);outEl=document.createElement('audio');outEl.setAttribute('playsinline','');outEl.srcObject=md.stream;
+   outEl.play().catch(()=>{lim.connect(ctx.destination);outEl=null;});}catch(e){lim.connect(ctx.destination);outEl=null;}}else lim.connect(ctx.destination);
   const n=ctx.sampleRate*3,ir=ctx.createBuffer(2,n,ctx.sampleRate);for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3.2);}
   rev=ctx.createConvolver();rev.buffer=ir;const rg=ctx.createGain();rg.gain.value=.55;rev.connect(rg).connect(master);
   bus=ctx.createGain();bus.connect(master);
   const len=ctx.sampleRate*4;noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);const d=noiseBuf.getChannelData(0);let b0=0,b1=0,b2=0;
   for(let i=0;i<len;i++){const w=Math.random()*2-1;b0=.997*b0+w*.029591;b1=.985*b1+w*.032534;b2=.95*b2+w*.048056;d[i]=(b0+b1+b2+w*.05)*.9;}
   const loop=()=>{const s=ctx.createBufferSource();s.buffer=noiseBuf;s.loop=true;s.start(0,Math.random()*3);return s;};
-  humF=ctx.createBiquadFilter();humF.type='lowpass';humF.frequency.value=240;hum=ctx.createGain();hum.gain.value=0;loop().connect(humF).connect(hum).connect(bus);
+  humF=ctx.createBiquadFilter();humF.type='lowpass';humF.frequency.value=420;hum=ctx.createGain();hum.gain.value=0;loop().connect(humF).connect(hum).connect(bus);
   windF=ctx.createBiquadFilter();windF.type='bandpass';windF.frequency.value=520;windF.Q.value=.6;wind=ctx.createGain();wind.gain.value=0;loop().connect(windF).connect(wind).connect(bus);wind.connect(rev);
   nextChord=ctx.currentTime+.3;}
  function env(g,t,a,peak,dur){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.exponentialRampToValueAtTime(.0001,t+dur);}
- function pad(t){const notes=PADS[ci++%PADS.length],f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=night>.5?650:950;const g=ctx.createGain();
-  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.055,t+3.5);g.gain.setValueAtTime(.055,t+8);g.gain.linearRampToValueAtTime(0,t+12.5);f.connect(g);g.connect(bus);g.connect(rev);
+ function pad(t){const notes=PADS[ci++%PADS.length],f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=night>.5?1100:1700;const g=ctx.createGain();
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.075,t+3.5);g.gain.setValueAtTime(.075,t+8);g.gain.linearRampToValueAtTime(0,t+12.5);f.connect(g);g.connect(bus);g.connect(rev);
   for(const fr of notes)for(const det of[-7,7]){const o=ctx.createOscillator();o.type='triangle';o.frequency.value=fr;o.detune.value=det;const og=ctx.createGain();og.gain.value=.16;o.connect(og).connect(f);o.start(t);o.stop(t+12.6);}}
- function pluck(t){const fr=pick(MEL)*(night>.5?.5:1),g=ctx.createGain(),p=ctx.createStereoPanner();p.pan.value=rr(-.5,.5);env(g,t,.008,.045,3);g.connect(p);p.connect(bus);p.connect(rev);
+ function pluck(t,fr0,peak){const fr=fr0||pick(MEL)*(night>.5?.75:1),g=ctx.createGain(),p=ctx.createStereoPanner();p.pan.value=rr(-.5,.5);env(g,t,.008,peak||.09,3);g.connect(p);p.connect(bus);p.connect(rev);
   for(const[m,ty,a]of[[1,'sine',1],[2,'sine',.25],[3.01,'triangle',.08]]){const o=ctx.createOscillator(),og=ctx.createGain();o.type=ty;o.frequency.value=fr*m;og.gain.value=a;o.connect(og).connect(g);o.start(t);o.stop(t+3.1);}}
  function chirp(t){const p=ctx.createStereoPanner();p.pan.value=rr(-.9,.9);p.connect(bus);p.connect(rev);const base=rr(2400,3600),n=ri(2,5);
   for(let i=0;i<n;i++){const s=t+i*rr(.09,.16),o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(base*rr(.9,1.1),s);o.frequency.exponentialRampToValueAtTime(base*rr(1.15,1.45),s+.07);
-   env(g,s,.01,.018,.12);o.connect(g).connect(p);o.start(s);o.stop(s+.15);}}
+   env(g,s,.01,.04,.12);o.connect(g).connect(p);o.start(s);o.stop(s+.15);}}
  function cricket(t){const p=ctx.createStereoPanner();p.pan.value=rr(-1,1);p.connect(bus);const fr=rr(4200,4700);
-  for(let i=0;i<ri(3,5);i++){const s=t+i*.038,o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=fr;env(g,s,.004,.006,.03);o.connect(g).connect(p);o.start(s);o.stop(s+.04);}}
+  for(let i=0;i<ri(3,5);i++){const s=t+i*.038,o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=fr;env(g,s,.004,.014,.03);o.connect(g).connect(p);o.start(s);o.stop(s+.04);}}
  function swoosh(t){const s=ctx.createBufferSource();s.buffer=noiseBuf;const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=1.2;const p=ctx.createStereoPanner(),g=ctx.createGain(),d=rr(1.6,2.4),dir=R()<.5?-1:1;
   f.frequency.setValueAtTime(380,t);f.frequency.linearRampToValueAtTime(rr(800,1100),t+d*.5);f.frequency.linearRampToValueAtTime(360,t+d);
-  p.pan.setValueAtTime(-.8*dir,t);p.pan.linearRampToValueAtTime(.8*dir,t+d);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.035,t+d*.5);g.gain.linearRampToValueAtTime(0,t+d);
+  p.pan.setValueAtTime(-.8*dir,t);p.pan.linearRampToValueAtTime(.8*dir,t+d);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.07,t+d*.5);g.gain.linearRampToValueAtTime(0,t+d);
   s.connect(f).connect(g).connect(p).connect(bus);s.start(t,Math.random()*2);s.stop(t+d+.05);}
- function bell(t,count){for(let k=0;k<count;k++){const s=t+k*2.2,g=ctx.createGain();env(g,s,.01,.05,5.5);g.connect(bus);g.connect(rev);
+ function bell(t,count){for(let k=0;k<count;k++){const s=t+k*2.2,g=ctx.createGain();env(g,s,.01,.08,5.5);g.connect(bus);g.connect(rev);
   for(const[m,a]of[[1,1],[2.01,.5],[2.76,.3],[4.07,.15]]){const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=196*m;og.gain.value=a;o.connect(og).connect(g);o.start(s);o.stop(s+5.6);}}}
  function update(dt){if(!ctx||!on)return;const t=ctx.currentTime,close=cl((120-cam.dist)/90,0,1),day=1-night;
-  hum.gain.setTargetAtTime(.05*(.35+close*.65)*(1-night*.55),t,.8);wind.gain.setTargetAtTime(.022+night*.012+(1-close)*.02,t,1.2);windF.frequency.setTargetAtTime(480+Math.sin(t*.13)*140,t,.5);
+  hum.gain.setTargetAtTime(.07*(.35+close*.65)*(1-night*.55),t,.8);wind.gain.setTargetAtTime(.022+night*.012+(1-close)*.02,t,1.2);windF.frequency.setTargetAtTime(480+Math.sin(t*.13)*140,t,.5);
   if(t>nextChord-.4){pad(nextChord);nextChord+=10;}
   const cars=vehicles.length;const P=r=>R()<r*dt;
   if(P(night>.5?.07:.11))pluck(t+.05);
@@ -962,9 +966,12 @@ const Sound=(()=>{let ctx=null,master,rev,bus,hum,humF,wind,windF,noiseBuf,on=fa
   if(P(night>.45?2.4*night:0))cricket(t+.02);
   if(P(Math.min(.7,cars*.1)*(.3+close*.7)))swoosh(t+.05);
   const hr=Math.floor(minutes/60);if(hr!==lastHr){if(lastHr>=0&&hr>=8&&hr<=20&&!warp)bell(t+.1,hr%12===0?2:1);lastHr=hr;}}
- function setOn(v){if(v&&!ctx)init();on=v;if(!ctx)return;if(v)ctx.resume();master.gain.setTargetAtTime(v?vol*2.8:0,ctx.currentTime,.6);if(!v)setTimeout(()=>{if(!on&&ctx)ctx.suspend();},1500);}
- function setVol(v){vol=v;if(ctx&&on)master.gain.setTargetAtTime(vol*2.8,ctx.currentTime,.2);}
- document.addEventListener('visibilitychange',()=>{if(!ctx)return;if(document.hidden)ctx.suspend();else if(on)ctx.resume();});
+ function ensureRunning(){if(!ctx||!on)return;const go=()=>{ctx.resume();if(outEl)outEl.play().catch(()=>{});};go();
+  setTimeout(()=>{if(on&&ctx.state!=='running'){log('Tap anywhere in the town to start the sound');const k=()=>{removeEventListener('pointerdown',k,true);go();};addEventListener('pointerdown',k,true);}},400);}
+ function setOn(v){if(v&&!ctx)init();on=v;if(!ctx)return;if(v){ensureRunning();const t=ctx.currentTime+.08;[523.25,659.25,783.99].forEach((f,i)=>pluck(t+i*.16,f,.12));}
+  master.gain.setTargetAtTime(v?vol*4:0,ctx.currentTime,v?.25:.6);if(!v)setTimeout(()=>{if(!on&&ctx)ctx.suspend();},1500);}
+ function setVol(v){vol=v;if(ctx&&on)master.gain.setTargetAtTime(vol*4,ctx.currentTime,.2);}
+ document.addEventListener('visibilitychange',()=>{if(!ctx)return;if(document.hidden)ctx.suspend();else if(on){ctx.resume();if(outEl)outEl.play().catch(()=>{});}});
  return{update,setOn,setVol,get on(){return on;}};})();
 let soundPref=false;try{soundPref=localStorage.getItem('minitown-sound')==='on';}catch(e){}
 const sndBtn=$('#sndBtn'),sndVol=$('#sndVol');
