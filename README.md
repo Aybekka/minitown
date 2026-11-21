@@ -13,6 +13,7 @@ A cozy, retro-flavoured city sim that plays more like a god game than a manageme
 - **Day and night**: a full day cycle with a clickable 24-hour bar to skip ahead. At night the town turns cool and soft while windows, streetlights, shop signs and park lamps glow warm.
 - **Explore**: free camera, minimap, a slow Tour mode, and "Follow someone".
 - **Clear** blocks with the bulldozer; unused streets disappear with them.
+- **Relaxing soundscape** (press Sound or `M`): a soft ambient pad with music-box notes, city hum and breeze, birds by day, crickets at night, passing cars that follow the real traffic, and a gentle bell on the hour. Everything is generated live with the Web Audio API.
 - Your town **autosaves** in your browser.
 
 ## Controls
@@ -26,6 +27,7 @@ A cozy, retro-flavoured city sim that plays more like a god game than a manageme
 | Frame the town | `F` |
 | Tour / Follow someone | `T` / `G` |
 | Pause | `Space` |
+| Sound on/off | `M` |
 | Pixel rendering on/off | `P` |
 
 ## Tech

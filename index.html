@@ -28,6 +28,7 @@ canvas#c{position:fixed;inset:0;width:100vw;height:100vh;image-rendering:pixelat
 #tipBody a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px;cursor:pointer}
 #tip:not(.pinned) a{text-decoration:none}
 #speed{position:fixed;right:14px;top:14px;display:flex;gap:4px;padding:5px}
+#sndVol{width:80px;accent-color:#2b2433;align-self:center}
 #phase{font-size:13px;color:var(--soft);margin-top:-2px}
 #timebar{position:relative;height:14px;margin-top:6px;border:2px solid var(--ink);border-radius:3px;cursor:pointer;
  background:linear-gradient(90deg,#1b2452 0%,#1b2452 20.8%,#e9a487 25.8%,#a9d8ee 31.7%,#a9d8ee 69.2%,#f3a46e 76.2%,#5e5aa0 80.8%,#1b2452 85.8%,#1b2452 100%)}
@@ -80,7 +81,7 @@ button.on{background:var(--ink);color:var(--panel)}
 <div id="timebar" role="slider" aria-label="Time of day — click to skip ahead" tabindex="0"><i id="tbm"></i><span id="tbt"></span></div><div id="stats"></div><div id="demand" aria-label="Zone demand"></div><button id="newTown">New town</button></div>
 <div id="speed" class="card" role="group" aria-label="Simulation speed">
  <button data-s="0" title="Pause (Space)">❚❚</button><button data-s="1" class="on">1×</button><button data-s="3">3×</button><button data-s="8">8×</button>
- <button id="fit" title="Frame the whole town (F)">Fit</button><button id="pix" title="Toggle pixel rendering (P)">Pixel</button>
+ <button id="sndBtn" title="Relaxing city sounds (M)" aria-pressed="false">Sound</button><input id="sndVol" type="range" min="0" max="1" step="0.05" value="0.6" aria-label="Volume" hidden><button id="fit" title="Frame the whole town (F)">Fit</button><button id="pix" title="Toggle pixel rendering (P)">Pixel</button>
 </div>
 <div id="tools" class="card" role="toolbar" aria-label="Mode">
  <button data-m="explore" class="on"><svg viewBox="0 0 16 16" shape-rendering="crispEdges"><path fill="#c9b6e4" stroke="#2b2433" d="M6.5 1.5h3v4h4v3h-4v4h-3v-4h-4v-3h4z"/><rect x="7" y="13" width="2" height="2" fill="#2b2433"/></svg>Explore<kbd>1</kbd></button>
@@ -94,7 +95,7 @@ button.on{background:var(--ink);color:var(--panel)}
 <div id="log"></div>
 <div id="mapcard" class="card"><div class="mh"><b>Map</b><button id="tourBtn" title="Slowly orbit the town (T)">Tour</button><button id="followBtn" title="Follow someone who is out and about (G)">Follow someone</button></div><canvas id="mini" width="160" height="160" aria-label="Town map — click to jump there"></canvas></div>
 <div id="tip" class="card"><button class="x" aria-label="Close">✕</button><div id="tipBody"></div></div>
-<div id="intro" class="card"><h2>MiniTown</h2><p>An empty patch of land is waiting. Choose Homes, Shops, Work or Parks below, then click or drag across up to three lots. Roads grow around each block, builders get to work, and people move in. Your town saves itself in this browser.</p>
+<div id="intro" class="card"><h2>MiniTown</h2><p>An empty patch of land is waiting. Choose Homes, Shops, Work or Parks below, then click or drag across up to three lots. Roads grow around each block, builders get to work, and people move in. Your town saves itself in this browser. Press Sound (top right) for a cozy soundtrack.</p>
 <div class="btns"><button class="primary" id="startEmpty">Start building</button><button id="startSeed">Plant a starter town</button></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -719,7 +720,7 @@ function frameTown(){following=null;if(!blocks.length){cam.tx=0;cam.tz=2;cam.tdi
  cam.tx=(x0+x1)/2;cam.tz=(z0+z1)/2;cam.tdist=Math.max(26,Math.min(120,Math.max(x1-x0,z1-z0)*1.55+22));}
 const keys=new Set();
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;const k=e.key.toLowerCase();keys.add(k);
- if(k==='1')setMode('explore');if(k==='2')setMode('res');if(k==='3')setMode('shop');if(k==='4')setMode('work');if(k==='5')setMode('park');if(k==='6')setMode('doze');if(k==='t')setTour(!touring);if(k==='g')followSomeone();if(k==='f'||k==='home')frameTown();
+ if(k==='1')setMode('explore');if(k==='2')setMode('res');if(k==='3')setMode('shop');if(k==='4')setMode('work');if(k==='5')setMode('park');if(k==='6')setMode('doze');if(k==='t')setTour(!touring);if(k==='m')setSound(!Sound.on);if(k==='g')followSomeone();if(k==='f'||k==='home')frameTown();
  if(k===' '){e.preventDefault();setSpeed(speed?0:1);}if(k==='escape'){setMode('explore');pinned=null;following=null;renderTip(true);}if(k==='p')togglePix();});
 addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 let hintTimer=0;function showHint(){const h=$('#hint');h.style.opacity=1;clearTimeout(hintTimer);hintTimer=setTimeout(()=>h.style.opacity=0,9000);}
@@ -920,11 +921,65 @@ post=(()=>{try{const V='varying vec2 v;void main(){v=uv;gl_Position=vec4(positio
   comp.uniforms.bs.value=.25+night*.5;comp.uniforms.sat.value=1.04-night*.12;comp.uniforms.tint.value.setRGB(.045-night*.015,.035,.07+night*.04);pass(comp,null);}
  setSize();return{render,setSize};}catch(e){console.warn('Glow pass unavailable',e);return null;}})();
 
+// ---------- soundscape (all generated with Web Audio, no files) ----------
+const Sound=(()=>{let ctx=null,master,rev,bus,hum,humF,wind,windF,noiseBuf,on=false,vol=.6,nextChord=0,ci=0,lastHr=-1;
+ const PADS=[[130.81,164.81,196,246.94,293.66],[110,130.81,164.81,196,246.94],[87.31,110,130.81,164.81,246.94],[98,123.47,146.83,164.81,220]];
+ const MEL=[523.25,587.33,659.25,783.99,880,1046.5,1174.66];
+ const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+ function init(){ctx=new(window.AudioContext||window.webkitAudioContext)();master=ctx.createGain();master.gain.value=0;const lim=ctx.createDynamicsCompressor();lim.threshold.value=-14;lim.ratio.value=6;lim.attack.value=.01;lim.release.value=.3;master.connect(lim).connect(ctx.destination);
+  const n=ctx.sampleRate*3,ir=ctx.createBuffer(2,n,ctx.sampleRate);for(let c=0;c<2;c++){const d=ir.getChannelData(c);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,3.2);}
+  rev=ctx.createConvolver();rev.buffer=ir;const rg=ctx.createGain();rg.gain.value=.55;rev.connect(rg).connect(master);
+  bus=ctx.createGain();bus.connect(master);
+  const len=ctx.sampleRate*4;noiseBuf=ctx.createBuffer(1,len,ctx.sampleRate);const d=noiseBuf.getChannelData(0);let b0=0,b1=0,b2=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;b0=.997*b0+w*.029591;b1=.985*b1+w*.032534;b2=.95*b2+w*.048056;d[i]=(b0+b1+b2+w*.05)*.9;}
+  const loop=()=>{const s=ctx.createBufferSource();s.buffer=noiseBuf;s.loop=true;s.start(0,Math.random()*3);return s;};
+  humF=ctx.createBiquadFilter();humF.type='lowpass';humF.frequency.value=240;hum=ctx.createGain();hum.gain.value=0;loop().connect(humF).connect(hum).connect(bus);
+  windF=ctx.createBiquadFilter();windF.type='bandpass';windF.frequency.value=520;windF.Q.value=.6;wind=ctx.createGain();wind.gain.value=0;loop().connect(windF).connect(wind).connect(bus);wind.connect(rev);
+  nextChord=ctx.currentTime+.3;}
+ function env(g,t,a,peak,dur){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.exponentialRampToValueAtTime(.0001,t+dur);}
+ function pad(t){const notes=PADS[ci++%PADS.length],f=ctx.createBiquadFilter();f.type='lowpass';f.frequency.value=night>.5?650:950;const g=ctx.createGain();
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.055,t+3.5);g.gain.setValueAtTime(.055,t+8);g.gain.linearRampToValueAtTime(0,t+12.5);f.connect(g);g.connect(bus);g.connect(rev);
+  for(const fr of notes)for(const det of[-7,7]){const o=ctx.createOscillator();o.type='triangle';o.frequency.value=fr;o.detune.value=det;const og=ctx.createGain();og.gain.value=.16;o.connect(og).connect(f);o.start(t);o.stop(t+12.6);}}
+ function pluck(t){const fr=pick(MEL)*(night>.5?.5:1),g=ctx.createGain(),p=ctx.createStereoPanner();p.pan.value=rr(-.5,.5);env(g,t,.008,.045,3);g.connect(p);p.connect(bus);p.connect(rev);
+  for(const[m,ty,a]of[[1,'sine',1],[2,'sine',.25],[3.01,'triangle',.08]]){const o=ctx.createOscillator(),og=ctx.createGain();o.type=ty;o.frequency.value=fr*m;og.gain.value=a;o.connect(og).connect(g);o.start(t);o.stop(t+3.1);}}
+ function chirp(t){const p=ctx.createStereoPanner();p.pan.value=rr(-.9,.9);p.connect(bus);p.connect(rev);const base=rr(2400,3600),n=ri(2,5);
+  for(let i=0;i<n;i++){const s=t+i*rr(.09,.16),o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(base*rr(.9,1.1),s);o.frequency.exponentialRampToValueAtTime(base*rr(1.15,1.45),s+.07);
+   env(g,s,.01,.018,.12);o.connect(g).connect(p);o.start(s);o.stop(s+.15);}}
+ function cricket(t){const p=ctx.createStereoPanner();p.pan.value=rr(-1,1);p.connect(bus);const fr=rr(4200,4700);
+  for(let i=0;i<ri(3,5);i++){const s=t+i*.038,o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=fr;env(g,s,.004,.006,.03);o.connect(g).connect(p);o.start(s);o.stop(s+.04);}}
+ function swoosh(t){const s=ctx.createBufferSource();s.buffer=noiseBuf;const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=1.2;const p=ctx.createStereoPanner(),g=ctx.createGain(),d=rr(1.6,2.4),dir=R()<.5?-1:1;
+  f.frequency.setValueAtTime(380,t);f.frequency.linearRampToValueAtTime(rr(800,1100),t+d*.5);f.frequency.linearRampToValueAtTime(360,t+d);
+  p.pan.setValueAtTime(-.8*dir,t);p.pan.linearRampToValueAtTime(.8*dir,t+d);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.035,t+d*.5);g.gain.linearRampToValueAtTime(0,t+d);
+  s.connect(f).connect(g).connect(p).connect(bus);s.start(t,Math.random()*2);s.stop(t+d+.05);}
+ function bell(t,count){for(let k=0;k<count;k++){const s=t+k*2.2,g=ctx.createGain();env(g,s,.01,.05,5.5);g.connect(bus);g.connect(rev);
+  for(const[m,a]of[[1,1],[2.01,.5],[2.76,.3],[4.07,.15]]){const o=ctx.createOscillator(),og=ctx.createGain();o.frequency.value=196*m;og.gain.value=a;o.connect(og).connect(g);o.start(s);o.stop(s+5.6);}}}
+ function update(dt){if(!ctx||!on)return;const t=ctx.currentTime,close=cl((120-cam.dist)/90,0,1),day=1-night;
+  hum.gain.setTargetAtTime(.05*(.35+close*.65)*(1-night*.55),t,.8);wind.gain.setTargetAtTime(.022+night*.012+(1-close)*.02,t,1.2);windF.frequency.setTargetAtTime(480+Math.sin(t*.13)*140,t,.5);
+  if(t>nextChord-.4){pad(nextChord);nextChord+=10;}
+  const cars=vehicles.length;const P=r=>R()<r*dt;
+  if(P(night>.5?.07:.11))pluck(t+.05);
+  if(P(.4*day*day*(minutes>330&&minutes<1170?1:0)))chirp(t+.05);
+  if(P(night>.45?2.4*night:0))cricket(t+.02);
+  if(P(Math.min(.7,cars*.1)*(.3+close*.7)))swoosh(t+.05);
+  const hr=Math.floor(minutes/60);if(hr!==lastHr){if(lastHr>=0&&hr>=8&&hr<=20&&!warp)bell(t+.1,hr%12===0?2:1);lastHr=hr;}}
+ function setOn(v){if(v&&!ctx)init();on=v;if(!ctx)return;if(v)ctx.resume();master.gain.setTargetAtTime(v?vol*2.8:0,ctx.currentTime,.6);if(!v)setTimeout(()=>{if(!on&&ctx)ctx.suspend();},1500);}
+ function setVol(v){vol=v;if(ctx&&on)master.gain.setTargetAtTime(vol*2.8,ctx.currentTime,.2);}
+ document.addEventListener('visibilitychange',()=>{if(!ctx)return;if(document.hidden)ctx.suspend();else if(on)ctx.resume();});
+ return{update,setOn,setVol,get on(){return on;}};})();
+let soundPref=false;try{soundPref=localStorage.getItem('minitown-sound')==='on';}catch(e){}
+const sndBtn=$('#sndBtn'),sndVol=$('#sndVol');
+try{const v=parseFloat(localStorage.getItem('minitown-vol'));if(v>=0&&v<=1)sndVol.value=v;}catch(e){}
+Sound.setVol(+sndVol.value);
+function setSound(v){Sound.setOn(v);sndBtn.classList.toggle('on',v);sndBtn.setAttribute('aria-pressed',v);sndVol.hidden=!v;try{localStorage.setItem('minitown-sound',v?'on':'off');}catch(e){}}
+sndBtn.onclick=()=>setSound(!Sound.on);
+sndVol.oninput=()=>{Sound.setVol(+sndVol.value);try{localStorage.setItem('minitown-vol',sndVol.value);}catch(e){}};
+if(soundPref){const kick=()=>{removeEventListener('pointerdown',kick,true);removeEventListener('keydown',kick,true);setSound(true);};addEventListener('pointerdown',kick,true);addEventListener('keydown',kick,true);}
+
 // ---------- loop ----------
 let last=performance.now(),hudT=0,saveT=15;applySky();
 function frame(t){requestAnimationFrame(frame);const dt=Math.min(.1,(t-last)/1000);last=t;
  let gdt=dt*GM_PER_SEC*(warp?45:speed);if(warp){gdt=Math.min(gdt,warp.left);warp.left-=gdt;if(warp.left<=.01)warp=null;}if(gdt>0){const steps=Math.ceil(gdt/1.5);for(let i=0;i<steps;i++)tick(gdt/steps);}
- camKeys(dt);if(touring){cam.tyaw+=dt*.07;}if(following){const p=refPos(following);cam.tx=p.x;cam.tz=p.z;}updateCam(dt);applySky();visuals(dt,t/1000);
+ Sound.update(dt);camKeys(dt);if(touring){cam.tyaw+=dt*.07;}if(following){const p=refPos(following);cam.tx=p.x;cam.tz=p.z;}updateCam(dt);applySky();visuals(dt,t/1000);
  if(mode==='explore'&&!pdown&&!pinned){hovered=pickAt();}tipT-=dt;hudT-=dt;renderTip(false);if(hudT<=0){hudT=.25;hud();}miniT-=dt;if(miniT<=0){miniT=.2;drawMini();}saveT-=dt;if(saveT<=0){saveT=15;save();}
  if(post)post.render();else renderer.render(scene,camera);}
 requestAnimationFrame(frame);
